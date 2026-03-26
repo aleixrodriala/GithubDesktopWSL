@@ -43,7 +43,8 @@ jobs:
     steps:
       - name: Checkout github-desktop-wsl (for patches + daemon source)
         uses: actions/checkout@v4
-        path: wsl-repo
+        with:
+          path: wsl-repo
 
       - name: Clone upstream desktop/desktop at release tag
         run: |
