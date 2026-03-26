@@ -1,6 +1,6 @@
 # GitHub Desktop WSL
 
-Think of it like the [VS Code Remote WSL extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-wsl) but for GitHub Desktop. A fork of [GitHub Desktop](https://github.com/desktop/desktop) that makes WSL repositories work properly — **6-27x faster git operations**, working SSH keys, and no more CRLF issues.
+Think of it like the [VS Code Remote WSL extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-wsl) but for GitHub Desktop. A fork of [GitHub Desktop](https://github.com/desktop/desktop) that makes WSL repositories work properly — **16-50x faster git operations**, working SSH keys, and no more CRLF issues.
 
 **[Download the latest release](https://github.com/aleixrodriala/GithubDesktopWSL/releases/latest)** — installs side-by-side with official GitHub Desktop
 
@@ -29,23 +29,51 @@ This fork (fast path):
 
 The daemon is bundled inside the installer. When you open a WSL repo, it's deployed and started automatically. There's nothing to configure.
 
+## Why a daemon and not a git shim?
+
+The simpler approach is to replace Desktop's bundled `git.exe` with a shim that calls `wsl.exe -e git`. Projects like [wsl-git-bridge](https://github.com/MiloudiMohamed/wsl-git-bridge) and my own earlier [wsl-git-shim](https://github.com/aleixrodriala/wsl-git-shim) do this. It works, but has limitations:
+
+**Spawn overhead** — Every command pays ~92ms to launch `wsl.exe`, even a trivial `git rev-parse`. The daemon is a persistent process, so it has ~2ms overhead (TCP round-trip + framing). Over a typical Desktop refresh cycle (10-20 commands), that's ~1-2 seconds vs ~20-40ms.
+
+**File operations aren't covered** — Desktop doesn't just run git. It also reads diffs, checks merge/rebase state, reads and writes `.gitignore`, checks submodule paths — 8 different files do direct filesystem operations. A git-only shim leaves all of these going through 9P. The daemon handles them natively.
+
+**Breaks on Desktop updates** — Desktop ships its own bundled `git.exe` inside each version's Squirrel package. Every update creates a new `app-<version>` directory with a fresh `git.exe`, so a replaced shim gets wiped. This fork is a separate app — updates come from its own release channel.
+
+| | Daemon (this fork) | Git shim |
+|---|---|---|
+| Per-command overhead | ~2ms | ~92ms |
+| File operations (diffs, merge state, .gitignore) | Native | Still 9P |
+| Survives Desktop updates | Yes | No |
+| Install | Run installer | Replace git.exe manually |
+
 ## Performance
 
-**6x-27x faster** across all git operations compared to official Desktop on WSL repos.
+Three ways to run git on a WSL repo, benchmarked across repo sizes:
+
+### Spawn overhead
+
+Before any git work happens, each approach has a fixed cost:
+
+| Approach | Overhead |
+|----------|----------|
+| Native git (daemon) | 1 ms |
+| git.exe (9P) | 46 ms |
+| wsl.exe -e (shim) | 94 ms |
 
 ### Git operations by repo size
 
 <table>
-<tr><th>Operation</th><th colspan="2">Small (20 files)</th><th colspan="2">Medium (333 files)</th><th colspan="2">Large (2,372 files)</th></tr>
-<tr><th></th><th>Daemon</th><th>git.exe</th><th>Daemon</th><th>git.exe</th><th>Daemon</th><th>git.exe</th></tr>
-<tr><td>git status</td><td>2 ms</td><td>43 ms (20x)</td><td>3 ms</td><td>41 ms (15x)</td><td>7 ms</td><td>41 ms (6x)</td></tr>
-<tr><td>git log -20</td><td>2 ms</td><td>41 ms (24x)</td><td>3 ms</td><td>41 ms (16x)</td><td>3 ms</td><td>41 ms (14x)</td></tr>
-<tr><td>git diff HEAD~1</td><td>2 ms</td><td>41 ms (25x)</td><td>2 ms</td><td>41 ms (20x)</td><td>3 ms</td><td>43 ms (14x)</td></tr>
-<tr><td>git branch -a</td><td>2 ms</td><td>44 ms (23x)</td><td>2 ms</td><td>40 ms (18x)</td><td>3 ms</td><td>51 ms (20x)</td></tr>
-<tr><td>git rev-parse</td><td>2 ms</td><td>42 ms (27x)</td><td>2 ms</td><td>40 ms (26x)</td><td>2 ms</td><td>41 ms (27x)</td></tr>
-<tr><td>for-each-ref</td><td>2 ms</td><td>42 ms (26x)</td><td>3 ms</td><td>40 ms (12x)</td><td>4 ms</td><td>41 ms (11x)</td></tr>
-<tr><td><strong>Average speedup</strong></td><td colspan="2"><strong>24x</strong></td><td colspan="2"><strong>18x</strong></td><td colspan="2"><strong>16x</strong></td></tr>
+<tr><th>Operation</th><th colspan="3">Small (21 files)</th><th colspan="3">Medium (334 files)</th><th colspan="3">Large (2,373 files)</th></tr>
+<tr><th></th><th>Daemon</th><th>git.exe (9P)</th><th>Shim</th><th>Daemon</th><th>git.exe (9P)</th><th>Shim</th><th>Daemon</th><th>git.exe (9P)</th><th>Shim</th></tr>
+<tr><td>git status</td><td>2 ms</td><td>50 ms (25x)</td><td>93 ms (46x)</td><td>2 ms</td><td>51 ms (25x)</td><td>93 ms (46x)</td><td>3 ms</td><td>50 ms (16x)</td><td>92 ms (30x)</td></tr>
+<tr><td>git log</td><td>2 ms</td><td>50 ms (25x)</td><td>92 ms (46x)</td><td>2 ms</td><td>51 ms (25x)</td><td>91 ms (45x)</td><td>2 ms</td><td>49 ms (24x)</td><td>93 ms (46x)</td></tr>
+<tr><td>git diff</td><td>2 ms</td><td>49 ms (24x)</td><td>90 ms (45x)</td><td>2 ms</td><td>48 ms (24x)</td><td>91 ms (45x)</td><td>2 ms</td><td>50 ms (25x)</td><td>92 ms (46x)</td></tr>
+<tr><td>git branch</td><td>1 ms</td><td>50 ms (50x)</td><td>93 ms (93x)</td><td>1 ms</td><td>49 ms (49x)</td><td>92 ms (92x)</td><td>2 ms</td><td>49 ms (24x)</td><td>90 ms (45x)</td></tr>
+<tr><td>git rev-parse</td><td>1 ms</td><td>51 ms (51x)</td><td>92 ms (92x)</td><td>1 ms</td><td>49 ms (49x)</td><td>92 ms (92x)</td><td>1 ms</td><td>49 ms (49x)</td><td>92 ms (92x)</td></tr>
+<tr><td>git for-each-ref</td><td>1 ms</td><td>51 ms (51x)</td><td>96 ms (96x)</td><td>1 ms</td><td>51 ms (51x)</td><td>92 ms (92x)</td><td>2 ms</td><td>50 ms (25x)</td><td>91 ms (45x)</td></tr>
 </table>
+
+> Benchmarks: 11 iterations, median, WSL2 on Windows 11 (kernel 6.6.87.2). [Full benchmark script and results](benchmark/).
 
 ### Real Desktop workflows
 
@@ -58,11 +86,13 @@ These are the actual sequences Desktop runs during common operations:
 | View last commit diff | 4 ms | 44 ms | **10x** |
 | Pre-fetch checks | 3 ms | 82 ms | **26x** |
 
-> Benchmarks: 7 iterations, median, WSL2 on Windows 11. The "open repo" workflow includes `git status`, `for-each-ref`, 4 `pathExists` checks, `readFile`, and `git log`.
+> The "open repo" workflow includes `git status`, `for-each-ref`, 4 `pathExists` checks, `readFile`, and `git log`.
 
 ### Why the difference is so large
 
-`git.exe` running on a WSL repo has a ~40ms floor for *any* operation — that's the cost of launching `git.exe` through 9P and resolving paths across the VM boundary. Our daemon has ~2ms overhead (TCP round-trip + message framing). The actual git work is the same; the difference is entirely in how files are accessed.
+`git.exe` running on a WSL repo has a ~50ms floor for *any* operation — that's the cost of accessing files through 9P across the VM boundary. A `wsl.exe -e git` shim avoids 9P but pays ~92ms to spawn `wsl.exe` per command — actually slower than 9P for typical Desktop operations. The daemon has ~2ms overhead (TCP round-trip + message framing). The actual git work is the same; the difference is entirely in how commands are dispatched and files are accessed.
+
+A typical Desktop refresh runs 10-20 commands. With git.exe that's 500-1000ms of pure overhead. With a shim it's 920-1840ms. With the daemon it's 20-40ms.
 
 ## Install
 
@@ -187,10 +217,6 @@ yarn build:prod    # production
 # 4. Package installer (production only)
 SKIP_CODE_SIGNING=1 yarn package
 ```
-
-## Related projects
-
-- **[wsl-git-shim](https://github.com/aleixrodriala/wsl-git-shim)** — A simpler, zero-fork approach: replaces Desktop's bundled `git.exe` with a shim that routes WSL paths to `wsl.exe -e git`. Works with official Desktop but slower (~40ms overhead per command from spawning `wsl.exe`) and doesn't support file operations.
 
 ## License
 
