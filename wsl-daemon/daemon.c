@@ -144,34 +144,90 @@ static int send_exit(int fd, int code) {
 
 /* --- Minimal JSON parser (good enough for our protocol) --- */
 
-static const char *json_find_string(const char *json, const char *key, char *out, size_t out_sz) {
+static int hex4(const char *p) {
+    int v = 0;
+    for (int i = 0; i < 4; i++) {
+        int c = (unsigned char)p[i];
+        int d;
+        if (c >= '0' && c <= '9') d = c - '0';
+        else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') d = c - 'A' + 10;
+        else return -1;
+        v = (v << 4) | d;
+    }
+    return v;
+}
+
+/* Encode a BMP codepoint as UTF-8. Returns bytes written (1-3). */
+static size_t utf8_encode(int cp, char *out) {
+    if (cp < 0x80) {
+        out[0] = (char)cp;
+        return 1;
+    }
+    if (cp < 0x800) {
+        out[0] = (char)(0xC0 | (cp >> 6));
+        out[1] = (char)(0x80 | (cp & 0x3F));
+        return 2;
+    }
+    out[0] = (char)(0xE0 | (cp >> 12));
+    out[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+    out[2] = (char)(0x80 | (cp & 0x3F));
+    return 3;
+}
+
+/* Binary-safe JSON string extraction.
+ * Decodes standard escapes plus \uXXXX (as UTF-8). The result may contain
+ * embedded NULs (e.g. from \u0000) — pass the returned length to any consumer
+ * instead of using strlen. Returns bytes written, or -1 if the key is missing. */
+static ssize_t json_find_string_bin(const char *json, const char *key, char *out, size_t out_sz) {
     char needle[256];
     snprintf(needle, sizeof(needle), "\"%s\"", key);
     const char *p = strstr(json, needle);
-    if (!p) return NULL;
+    if (!p) return -1;
     p += strlen(needle);
     while (*p == ' ' || *p == ':') p++;
-    if (*p != '"') return NULL;
+    if (*p != '"') return -1;
     p++;
     size_t i = 0;
-    while (*p && *p != '"' && i < out_sz - 1) {
+    while (*p && *p != '"' && i < out_sz) {
         if (*p == '\\' && *(p+1)) {
             p++;
             switch (*p) {
-                case 'n': out[i++] = '\n'; break;
-                case 'r': out[i++] = '\r'; break;
-                case 't': out[i++] = '\t'; break;
-                case '\\': out[i++] = '\\'; break;
-                case '"': out[i++] = '"'; break;
-                case '/': out[i++] = '/'; break;
-                default: out[i++] = *p; break;
+                case 'n': out[i++] = '\n'; p++; break;
+                case 'r': out[i++] = '\r'; p++; break;
+                case 't': out[i++] = '\t'; p++; break;
+                case 'b': out[i++] = '\b'; p++; break;
+                case 'f': out[i++] = '\f'; p++; break;
+                case '\\': out[i++] = '\\'; p++; break;
+                case '"': out[i++] = '"'; p++; break;
+                case '/': out[i++] = '/'; p++; break;
+                case 'u': {
+                    p++;
+                    int cp = hex4(p);
+                    if (cp < 0) break;
+                    p += 4;
+                    size_t need = cp < 0x80 ? 1 : cp < 0x800 ? 2 : 3;
+                    if (i + need > out_sz) goto done;
+                    i += utf8_encode(cp, out + i);
+                    break;
+                }
+                default: out[i++] = *p; p++; break;
             }
-            p++;
         } else {
             out[i++] = *p++;
         }
     }
-    out[i] = '\0';
+done:
+    return (ssize_t)i;
+}
+
+/* Null-terminated string extraction for fields that cannot contain NULs
+ * (token, cwd, cmd, path). Reserves 1 byte for the terminator. */
+static const char *json_find_string(const char *json, const char *key, char *out, size_t out_sz) {
+    if (out_sz == 0) return NULL;
+    ssize_t n = json_find_string_bin(json, key, out, out_sz - 1);
+    if (n < 0) return NULL;
+    out[n] = '\0';
     return out;
 }
 
@@ -222,9 +278,18 @@ static void handle_git(int cfd, const char *json) {
     char **args = NULL;
     int argc = 0;
 
-    char stdin_buf[65536] = "";
+    /* stdin may be binary (e.g. NUL-separated paths for `update-index -z --stdin`)
+     * and arbitrarily large. Size the buffer from the JSON length upper bound. */
+    size_t stdin_cap = strlen(json) + 1;
+    char *stdin_buf = malloc(stdin_cap);
+    if (!stdin_buf) {
+        send_error(cfd, "malloc failed");
+        return;
+    }
+    ssize_t stdin_len = json_find_string_bin(json, "stdin", stdin_buf, stdin_cap);
+    if (stdin_len < 0) stdin_len = 0;
+
     json_find_string(json, "cwd", cwd, sizeof(cwd));
-    json_find_string(json, "stdin", stdin_buf, sizeof(stdin_buf));
     json_find_string_array(json, "args", &args, &argc);
 
     /* Build argv: ["git", args...] */
@@ -275,8 +340,8 @@ static void handle_git(int cfd, const char *json) {
     close(pipe_out[1]);
     close(pipe_err[1]);
     close(pipe_in[0]);
-    if (stdin_buf[0] != '\0') {
-        write_exact(pipe_in[1], stdin_buf, strlen(stdin_buf));
+    if (stdin_len > 0) {
+        write_exact(pipe_in[1], stdin_buf, (size_t)stdin_len);
     }
     close(pipe_in[1]); /* Signal EOF to child's stdin */
 
@@ -325,6 +390,7 @@ cleanup:
         free(args);
     }
     free(argv);
+    free(stdin_buf);
 }
 
 static void handle_readfile(int cfd, const char *json) {
