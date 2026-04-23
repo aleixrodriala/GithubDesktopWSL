@@ -73,6 +73,13 @@ jobs:
           cp -r wsl-repo/wsl-daemon desktop/wsl-daemon
         shell: bash
 
+      - name: Override app version so Squirrel sees a new release
+        run: |
+          cd desktop
+          node -e "const fs=require('fs');const p='app/package.json';const j=JSON.parse(fs.readFileSync(p));j.version='${{ inputs.version }}';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n');"
+          grep '"version"' app/package.json
+        shell: bash
+
       - name: Download daemon binary
         uses: actions/download-artifact@v8
         with:
