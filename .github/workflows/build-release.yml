@@ -229,10 +229,24 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            const title = `Patch failure on upstream ${{ inputs.upstream_tag }}`;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'patch-conflict',
+              per_page: 100,
+            });
+            const dup = existing.find(i => i.title === title);
+            if (dup) {
+              console.log(`Open issue #${dup.number} already tracks this failure; skipping duplicate.`);
+              return;
+            }
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Patch failure on upstream ${{ inputs.upstream_tag }}`,
-              body: `The build workflow failed while applying patches onto \`${{ inputs.upstream_tag }}\`.\n\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nThis likely means upstream changed a file that one of our patches targets. The patch needs to be regenerated.`,
+              title,
+              body: `The build workflow failed while applying patches onto \`${{ inputs.upstream_tag }}\`.\n\nCheck the [workflow run](${runUrl}) for details.\n\nThis likely means upstream changed a file that one of our patches targets. The patch needs to be regenerated.`,
               labels: ['patch-conflict']
             });

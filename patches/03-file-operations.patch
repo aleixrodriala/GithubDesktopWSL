@@ -1,5 +1,5 @@
 diff --git a/app/src/lib/git/cherry-pick.ts b/app/src/lib/git/cherry-pick.ts
-index b1ef16800d..2529e022d9 100644
+index f8f14fe..2529e02 100644
 --- a/app/src/lib/git/cherry-pick.ts
 +++ b/app/src/lib/git/cherry-pick.ts
 @@ -24,8 +24,7 @@ import { ManualConflictResolution } from '../../models/manual-conflict-resolutio
@@ -7,13 +7,13 @@ index b1ef16800d..2529e022d9 100644
  import { getCommit } from '.'
  import { IMultiCommitOperationProgress } from '../../models/progress'
 -import { readFile } from 'fs/promises'
--import { pathExists } from '../../ui/lib/path-exists'
+-import { pathExists } from '../path-exists'
 +import { wslReadFile as readFile, wslPathExists as pathExists } from '../wsl'
  
  /** The app-specific results from attempting to cherry pick commits*/
  export enum CherryPickResult {
 diff --git a/app/src/lib/git/description.ts b/app/src/lib/git/description.ts
-index ca15d74d9b..6da6582895 100644
+index ca15d74..6da6582 100644
 --- a/app/src/lib/git/description.ts
 +++ b/app/src/lib/git/description.ts
 @@ -1,5 +1,8 @@
@@ -27,7 +27,7 @@ index ca15d74d9b..6da6582895 100644
  const GitDescriptionPath = '.git/description'
  
 diff --git a/app/src/lib/git/diff.ts b/app/src/lib/git/diff.ts
-index d1d99ad628..7edfbda7fc 100644
+index d1d99ad..7edfbda 100644
 --- a/app/src/lib/git/diff.ts
 +++ b/app/src/lib/git/diff.ts
 @@ -24,6 +24,7 @@ import {
@@ -51,7 +51,7 @@ index d1d99ad628..7edfbda7fc 100644
      contents.buffer,
      contents.toString('base64'),
 diff --git a/app/src/lib/git/gitignore.ts b/app/src/lib/git/gitignore.ts
-index 671f703b0e..a3ffe5fcee 100644
+index 671f703..a3ffe5f 100644
 --- a/app/src/lib/git/gitignore.ts
 +++ b/app/src/lib/git/gitignore.ts
 @@ -2,7 +2,12 @@ import * as Path from 'path'
@@ -95,20 +95,20 @@ index 671f703b0e..a3ffe5fcee 100644
        FS.unlink(ignorePath, err => {
          if (err) {
 diff --git a/app/src/lib/git/merge.ts b/app/src/lib/git/merge.ts
-index 9b2d02604e..8de8cb3098 100644
+index 0d5434a..8de8cb3 100644
 --- a/app/src/lib/git/merge.ts
 +++ b/app/src/lib/git/merge.ts
 @@ -3,7 +3,7 @@ import * as Path from 'path'
  import { git, HookCallbackOptions } from './core'
  import { GitError } from 'dugite'
  import { Repository } from '../../models/repository'
--import { pathExists } from '../../ui/lib/path-exists'
+-import { pathExists } from '../path-exists'
 +import { wslPathExists as pathExists } from '../wsl'
  import { createMultiOperationTerminalOutputCallback } from './multi-operation-terminal-output'
  
  export enum MergeResult {
 diff --git a/app/src/lib/git/rebase.ts b/app/src/lib/git/rebase.ts
-index 301ecb303a..b92b979d2c 100644
+index 211192c..b92b979 100644
 --- a/app/src/lib/git/rebase.ts
 +++ b/app/src/lib/git/rebase.ts
 @@ -29,8 +29,7 @@ import { stageFiles } from './update-index'
@@ -116,33 +116,33 @@ index 301ecb303a..b92b979d2c 100644
  import { getCommitsBetweenCommits } from './rev-list'
  import { Branch } from '../../models/branch'
 -import { readFile } from 'fs/promises'
--import { pathExists } from '../../ui/lib/path-exists'
+-import { pathExists } from '../path-exists'
 +import { wslReadFile as readFile, wslPathExists as pathExists } from '../wsl'
  
  /** The app-specific results from attempting to rebase a repository */
  export enum RebaseResult {
 diff --git a/app/src/lib/git/submodule.ts b/app/src/lib/git/submodule.ts
-index 6b68b8413e..edea1e52dd 100644
+index 08d3201..edea1e5 100644
 --- a/app/src/lib/git/submodule.ts
 +++ b/app/src/lib/git/submodule.ts
 @@ -3,7 +3,7 @@ import * as Path from 'path'
  import { git, IGitStringExecutionOptions } from './core'
  import { Repository } from '../../models/repository'
  import { SubmoduleEntry } from '../../models/submodule'
--import { pathExists } from '../../ui/lib/path-exists'
+-import { pathExists } from '../path-exists'
 +import { wslPathExists as pathExists } from '../wsl'
  import { executionOptionsWithProgress, IGitOutput } from '../progress'
  import {
    envForRemoteOperation,
 diff --git a/app/src/lib/stores/app-store.ts b/app/src/lib/stores/app-store.ts
-index b5c518ddb4..22de80cbeb 100644
+index 0ef30cc..79daeca 100644
 --- a/app/src/lib/stores/app-store.ts
 +++ b/app/src/lib/stores/app-store.ts
-@@ -330,7 +330,7 @@ import {
+@@ -360,7 +360,7 @@ import {
    getNotificationsEnabled,
  } from './notifications-store'
  import * as ipcRenderer from '../ipc-renderer'
--import { pathExists } from '../../ui/lib/path-exists'
+-import { pathExists } from '../path-exists'
 +import { wslPathExists as pathExists } from '../wsl'
  import { offsetFromNow } from '../offset-from'
  import { findContributionTargetDefaultBranch } from '../branch'
