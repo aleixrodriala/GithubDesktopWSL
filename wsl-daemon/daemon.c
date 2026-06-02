@@ -54,6 +54,7 @@
 
 static char g_token[TOKEN_LEN * 2 + 1];
 static volatile int g_running = 1;
+static int g_port = 0;
 
 /* --- Utility --- */
 
@@ -79,6 +80,20 @@ static void write_info_file(int port) {
 static void sighandler(int sig) {
     (void)sig;
     g_running = 0;
+}
+
+/* Remove the info file on exit only if it still points at us. The path is
+ * shared across daemons, so a daemon shutting down must not clobber a newer
+ * daemon's info file. */
+static void unlink_info_if_ours(void) {
+    FILE *f = fopen(INFO_PATH, "r");
+    if (!f) return;
+    char buf[256];
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+    const char *p = strstr(buf, "\"port\":");
+    if (p && atoi(p + 7) == g_port) unlink(INFO_PATH);
 }
 
 /* --- Frame I/O --- */
@@ -683,8 +698,16 @@ int main(int argc, char *argv[]) {
             daemonize = 1;
     }
 
-    signal(SIGINT, sighandler);
-    signal(SIGTERM, sighandler);
+    /* Install SIGINT/SIGTERM without SA_RESTART so a blocking accept() returns
+     * EINTR and the main loop can observe g_running == 0 and shut down promptly.
+     * (glibc's signal() uses SA_RESTART, which made the daemon ignore SIGTERM
+     * until the next connection woke accept().) */
+    struct sigaction sa;
+    sa.sa_handler = sighandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
     signal(SIGPIPE, SIG_IGN);
     signal(SIGCHLD, SIG_DFL);
 
@@ -709,6 +732,7 @@ int main(int argc, char *argv[]) {
     socklen_t alen = sizeof(addr);
     getsockname(sfd, (struct sockaddr *)&addr, &alen);
     int port = ntohs(addr.sin_port);
+    g_port = port;
 
     if (listen(sfd, 16) < 0) { perror("listen"); return 1; }
 
@@ -758,7 +782,7 @@ int main(int argc, char *argv[]) {
         pthread_attr_destroy(&attr);
     }
 
-    unlink(INFO_PATH);
+    unlink_info_if_ours();
     close(sfd);
     printf("wsl-git-daemon stopped\n");
     return 0;
