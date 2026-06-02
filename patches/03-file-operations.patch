@@ -1,5 +1,5 @@
 diff --git a/app/src/lib/git/cherry-pick.ts b/app/src/lib/git/cherry-pick.ts
-index f8f14fe..2529e02 100644
+index f8f14fe..d279b9a 100644
 --- a/app/src/lib/git/cherry-pick.ts
 +++ b/app/src/lib/git/cherry-pick.ts
 @@ -24,8 +24,7 @@ import { ManualConflictResolution } from '../../models/manual-conflict-resolutio
@@ -12,6 +12,33 @@ index f8f14fe..2529e02 100644
  
  /** The app-specific results from attempting to cherry pick commits*/
  export enum CherryPickResult {
+@@ -216,7 +215,7 @@ function parseCherryPickResult(result: IGitResult): CherryPickResult {
+ export async function getCherryPickSnapshot(
+   repository: Repository
+ ): Promise<ICherryPickSnapshot | null> {
+-  if (!isCherryPickHeadFound(repository)) {
++  if (!(await isCherryPickHeadFound(repository))) {
+     // If there no cherry pick head, there is no cherry pick in progress.
+     return null
+   }
+@@ -298,7 +297,7 @@ export async function getCherryPickSnapshot(
+   } catch {
+     // could not parse sequencer files
+ 
+-    if (!isCherryPickHeadFound(repository)) {
++    if (!(await isCherryPickHeadFound(repository))) {
+       // We redo this check just because a user technically could end the
+       // cherry-pick by the time we got here.
+       return null
+@@ -411,7 +410,7 @@ export async function continueCherryPick(
+   }
+ 
+   // make sure cherry pick is still in progress to continue
+-  if (await !isCherryPickHeadFound(repository)) {
++  if (!(await isCherryPickHeadFound(repository))) {
+     return CherryPickResult.UnableToStart
+   }
+ 
 diff --git a/app/src/lib/git/description.ts b/app/src/lib/git/description.ts
 index ca15d74..6da6582 100644
 --- a/app/src/lib/git/description.ts
@@ -135,7 +162,7 @@ index 08d3201..edea1e5 100644
  import {
    envForRemoteOperation,
 diff --git a/app/src/lib/stores/app-store.ts b/app/src/lib/stores/app-store.ts
-index 0ef30cc..79daeca 100644
+index 0ef30cc..9292fc6 100644
 --- a/app/src/lib/stores/app-store.ts
 +++ b/app/src/lib/stores/app-store.ts
 @@ -360,7 +360,7 @@ import {
@@ -147,3 +174,12 @@ index 0ef30cc..79daeca 100644
  import { offsetFromNow } from '../offset-from'
  import { findContributionTargetDefaultBranch } from '../branch'
  import { ValidNotificationPullRequestReview } from '../valid-notification-pull-request-review'
+@@ -8032,7 +8032,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
+     repository: Repository,
+     sourceBranch: Branch | null
+   ): Promise<void> {
+-    if (!isCherryPickHeadFound(repository)) {
++    if (!(await isCherryPickHeadFound(repository))) {
+       return
+     }
+ 

@@ -1,5 +1,5 @@
 diff --git a/app/src/lib/git/core.ts b/app/src/lib/git/core.ts
-index 103b60bf3b..3429661f5a 100644
+index 103b60b..fdf21a7 100644
 --- a/app/src/lib/git/core.ts
 +++ b/app/src/lib/git/core.ts
 @@ -17,6 +17,7 @@ import { kStringMaxLength } from 'buffer'
@@ -10,7 +10,7 @@ index 103b60bf3b..3429661f5a 100644
  
  export const isMaxBufferExceededError = (
    error: unknown
-@@ -236,6 +237,64 @@ export async function git(
+@@ -236,6 +237,73 @@ export async function git(
  
    const opts = { ...defaultOptions, ...options }
  
@@ -21,6 +21,10 @@ index 103b60bf3b..3429661f5a 100644
 +      daemonExecGit(args, path, {
 +        encoding: options?.encoding === 'buffer' ? 'buffer' : undefined,
 +        stdin: typeof opts.stdin === 'string' ? opts.stdin : opts.stdin?.toString('utf8'),
++        // Forward the environment the caller set (e.g. GIT_EDITOR for
++        // cherry-pick/rebase --continue). TERM=dumb mirrors the dugite path.
++        // Auth/askpass env is intentionally omitted — WSL git uses native keys.
++        env: { TERM: 'dumb', ...opts.env },
 +      })
 +    )
 +
@@ -40,6 +44,11 @@ index 103b60bf3b..3429661f5a 100644
 +      gitError = parseError(stderrStr)
 +      if (gitError === null) {
 +        gitError = parseError(stdoutStr)
++      }
++      if (gitError === null) {
++        // dugite parses a combined stream; some errors (e.g. cherry-pick
++        // conflicts) split their markers across stdout and stderr.
++        gitError = parseError(`${stderrStr}\n${stdoutStr}`)
 +      }
 +    }
 +

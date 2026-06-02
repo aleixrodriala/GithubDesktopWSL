@@ -1,9 +1,9 @@
 diff --git a/app/src/lib/wsl.ts b/app/src/lib/wsl.ts
 new file mode 100644
-index 0000000000..1e64880983
+index 0000000..ecc8009
 --- /dev/null
 +++ b/app/src/lib/wsl.ts
-@@ -0,0 +1,490 @@
+@@ -0,0 +1,495 @@
 +/**
 + * WSL utilities and daemon client for GitHub Desktop WSL.
 + *
@@ -390,7 +390,11 @@ index 0000000000..1e64880983
 +export async function daemonExecGit(
 +  args: string[],
 +  cwd: string,
-+  options?: { encoding?: 'buffer' | BufferEncoding; stdin?: string }
++  options?: {
++    encoding?: 'buffer' | BufferEncoding
++    stdin?: string
++    env?: Record<string, string | undefined>
++  }
 +): Promise<DaemonGitResult> {
 +  const payload: Record<string, unknown> = {
 +    cmd: 'git',
@@ -398,6 +402,7 @@ index 0000000000..1e64880983
 +    cwd: toLinuxPath(cwd),
 +  }
 +  if (options?.stdin) payload.stdin = options.stdin
++  if (options?.env) payload.env = options.env
 +
 +  const result = await daemonRequest(payload, distroFor(cwd))
 +
@@ -495,7 +500,7 @@ index 0000000000..1e64880983
 +  return fsUnlink(filePath)
 +}
 diff --git a/app/src/models/repository.ts b/app/src/models/repository.ts
-index 74b9a89b9e..7c586f75b4 100644
+index 74b9a89..7c586f7 100644
 --- a/app/src/models/repository.ts
 +++ b/app/src/models/repository.ts
 @@ -7,6 +7,7 @@ import {
