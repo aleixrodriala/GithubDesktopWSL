@@ -17,7 +17,7 @@ index 0000000000..1e64880983
 +import * as fs from 'fs'
 +import { execFileSync } from 'child_process'
 +import { readFile as fsReadFile, writeFile as fsWriteFile, unlink as fsUnlink } from 'fs/promises'
-+import { pathExists as localPathExists } from '../ui/lib/path-exists'
++import { pathExists as localPathExists } from './path-exists'
 +
 +/* ── WSL Path Utilities ──────────────────────────────────────────────── */
 +
