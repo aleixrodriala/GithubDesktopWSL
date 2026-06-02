@@ -1,5 +1,5 @@
 diff --git a/app/src/lib/git/cherry-pick.ts b/app/src/lib/git/cherry-pick.ts
-index f8f14fe..d279b9a 100644
+index f8f14fe..a851f23 100644
 --- a/app/src/lib/git/cherry-pick.ts
 +++ b/app/src/lib/git/cherry-pick.ts
 @@ -24,8 +24,7 @@ import { ManualConflictResolution } from '../../models/manual-conflict-resolutio
@@ -12,7 +12,32 @@ index f8f14fe..d279b9a 100644
  
  /** The app-specific results from attempting to cherry pick commits*/
  export enum CherryPickResult {
-@@ -216,7 +215,7 @@ function parseCherryPickResult(result: IGitResult): CherryPickResult {
+@@ -162,17 +161,19 @@ export async function cherryPick(
+     )
+   }
+ 
+-  // --empty=keep follows pattern of making sure someone cherry
+-  //  picked commit summaries appear in target branch history even tho they may
+-  //  be empty. This flag also results in the ability to cherry pick empty
+-  //  commits (thus, --allow-empty is not required.)
++  // --keep-redundant-commits keeps cherry-picked commit summaries in the
++  //  target branch history even when they become empty. Upstream uses the
++  //  newer `--empty=keep` spelling, but the WSL daemon runs the distro's git,
++  //  which may predate git 2.45 where `--empty=<...>` was added to cherry-pick.
++  //  `--keep-redundant-commits` is the long-standing equivalent and is accepted
++  //  by both old and new git. See issue #56.
+   //
+   // -m 1 makes it so a merge commit always takes the first parent's history
+   //  (the branch you are cherry-picking from) for the commit. It also means
+   //  there could be multiple empty commits. I.E. If user does a range that
+   //  includes commits from that merge.
+   const result = await git(
+-    ['cherry-pick', ...commits.map(c => c.sha), '--empty=keep', '-m 1'],
++    ['cherry-pick', ...commits.map(c => c.sha), '--keep-redundant-commits', '-m 1'],
+     repository.path,
+     'cherry-pick',
+     baseOptions
+@@ -216,7 +217,7 @@ function parseCherryPickResult(result: IGitResult): CherryPickResult {
  export async function getCherryPickSnapshot(
    repository: Repository
  ): Promise<ICherryPickSnapshot | null> {
@@ -21,7 +46,7 @@ index f8f14fe..d279b9a 100644
      // If there no cherry pick head, there is no cherry pick in progress.
      return null
    }
-@@ -298,7 +297,7 @@ export async function getCherryPickSnapshot(
+@@ -298,7 +299,7 @@ export async function getCherryPickSnapshot(
    } catch {
      // could not parse sequencer files
  
@@ -30,7 +55,7 @@ index f8f14fe..d279b9a 100644
        // We redo this check just because a user technically could end the
        // cherry-pick by the time we got here.
        return null
-@@ -411,7 +410,7 @@ export async function continueCherryPick(
+@@ -411,7 +412,7 @@ export async function continueCherryPick(
    }
  
    // make sure cherry pick is still in progress to continue
