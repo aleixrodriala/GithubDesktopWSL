@@ -38,9 +38,20 @@ jobs:
       - name: Check if we already have this version
         id: check
         run: |
-          if gh release view "wsl-${{ steps.upstream.outputs.version }}" --repo "${{ github.repository }}" &>/dev/null; then
+          tag="wsl-${{ steps.upstream.outputs.version }}"
+          # Get the list of existing release tags. We must distinguish three cases:
+          #   1. the tag exists            -> skip (already released)
+          #   2. the tag is absent         -> build (genuinely new upstream)
+          #   3. the API call itself fails -> skip (transient error; never risk a duplicate build/release)
+          # The old `gh release view ... || skip=false` collapsed cases 2 and 3, so a transient
+          # API blip looked like a new version and spuriously triggered a build.
+          if ! tags=$(gh release list --repo "${{ github.repository }}" --limit 200 --json tagName --jq '.[].tagName' 2>err.txt); then
+            echo "::warning::Could not list releases (API error); skipping to avoid a spurious build."
+            cat err.txt || true
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Already released wsl-${{ steps.upstream.outputs.version }}"
+          elif grep -qxF "$tag" <<<"$tags"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Already released $tag"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
             echo "New upstream release: ${{ steps.upstream.outputs.tag }}"
@@ -50,16 +61,23 @@ jobs:
 
       - name: Trigger build
         if: steps.check.outputs.skip == 'false'
-        uses: actions/github-script@v8
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'build-release.yml',
-              ref: 'main',
-              inputs: {
-                version: '${{ steps.upstream.outputs.version }}',
-                upstream_tag: '${{ steps.upstream.outputs.tag }}'
-              }
-            });
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Dispatch the build, retrying transient failures (e.g. the intermittent
+          # 401 "Requires authentication" the GitHub API can return). A single blip
+          # must not silently skip a release of a new upstream version.
+          for attempt in 1 2 3 4 5; do
+            if gh workflow run build-release.yml \
+              --repo "${{ github.repository }}" \
+              --ref main \
+              -f version="${{ steps.upstream.outputs.version }}" \
+              -f upstream_tag="${{ steps.upstream.outputs.tag }}"; then
+              echo "Dispatched build for ${{ steps.upstream.outputs.tag }} (attempt $attempt)"
+              exit 0
+            fi
+            echo "Dispatch attempt $attempt failed; retrying in 20s..."
+            sleep 20
+          done
+          echo "::error::Failed to dispatch build after 5 attempts"
+          exit 1
