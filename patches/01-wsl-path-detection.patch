@@ -500,7 +500,7 @@ index 0000000..ecc8009
 +  return fsUnlink(filePath)
 +}
 diff --git a/app/src/models/repository.ts b/app/src/models/repository.ts
-index 74b9a89..7c586f7 100644
+index 6fc419e..6de06d7 100644
 --- a/app/src/models/repository.ts
 +++ b/app/src/models/repository.ts
 @@ -7,6 +7,7 @@ import {
@@ -511,9 +511,9 @@ index 74b9a89..7c586f7 100644
  import { createEqualityHash } from './equality-hash'
  
  function getBaseName(path: string): string {
-@@ -77,6 +78,11 @@ export class Repository {
-   public get path(): string {
-     return this.mainWorkTree.path
+@@ -78,6 +79,11 @@ export class Repository {
+   public get resolvedGitDir(): string {
+     return this.gitDir ?? Path.join(this.path, '.git')
    }
 +
 +  /** Whether this repository is on a WSL filesystem */
@@ -522,4 +522,4 @@ index 74b9a89..7c586f7 100644
 +  }
  }
  
- /** A worktree linked to a main working tree (aka `Repository`) */
+ /** Identical to `Repository`, except it **must** have a `gitHubRepository` */

@@ -1,11 +1,11 @@
 diff --git a/app/src/lib/git/cherry-pick.ts b/app/src/lib/git/cherry-pick.ts
-index f8f14fe..a851f23 100644
+index 7e9f184..91d4c0f 100644
 --- a/app/src/lib/git/cherry-pick.ts
 +++ b/app/src/lib/git/cherry-pick.ts
-@@ -24,8 +24,7 @@ import { ManualConflictResolution } from '../../models/manual-conflict-resolutio
- import { stageManualConflictResolution } from './stage'
+@@ -24,8 +24,7 @@ import { stageManualConflictResolution } from './stage'
  import { getCommit } from '.'
  import { IMultiCommitOperationProgress } from '../../models/progress'
+ import { join } from 'path'
 -import { readFile } from 'fs/promises'
 -import { pathExists } from '../path-exists'
 +import { wslReadFile as readFile, wslPathExists as pathExists } from '../wsl'
@@ -79,18 +79,18 @@ index ca15d74..6da6582 100644
  const GitDescriptionPath = '.git/description'
  
 diff --git a/app/src/lib/git/diff.ts b/app/src/lib/git/diff.ts
-index d1d99ad..7edfbda 100644
+index b6797fc..3c86d47 100644
 --- a/app/src/lib/git/diff.ts
 +++ b/app/src/lib/git/diff.ts
 @@ -24,6 +24,7 @@ import {
  import { DiffParser } from '../diff-parser'
  import { getOldPathOrDefault } from '../get-old-path'
- import { readFile } from 'fs/promises'
+ import { readFile, writeFile, unlink } from 'fs/promises'
 +import { isWSLPath, wslReadFile } from '../wsl'
+ import { getTempFilePath } from '../file-system'
  import { forceUnwrap } from '../fatal-error'
  import { git } from './core'
- import { NullTreeSHA } from './diff-index'
-@@ -775,7 +776,10 @@ export async function getWorkingDirectoryImage(
+@@ -894,7 +895,10 @@ export async function getWorkingDirectoryImage(
    repository: Repository,
    file: FileChange
  ): Promise<Image> {
@@ -147,10 +147,10 @@ index 671f703..a3ffe5f 100644
        FS.unlink(ignorePath, err => {
          if (err) {
 diff --git a/app/src/lib/git/merge.ts b/app/src/lib/git/merge.ts
-index 0d5434a..8de8cb3 100644
+index db52ba8..cecf576 100644
 --- a/app/src/lib/git/merge.ts
 +++ b/app/src/lib/git/merge.ts
-@@ -3,7 +3,7 @@ import * as Path from 'path'
+@@ -2,7 +2,7 @@ import { join } from 'path'
  import { git, HookCallbackOptions } from './core'
  import { GitError } from 'dugite'
  import { Repository } from '../../models/repository'
@@ -160,13 +160,13 @@ index 0d5434a..8de8cb3 100644
  
  export enum MergeResult {
 diff --git a/app/src/lib/git/rebase.ts b/app/src/lib/git/rebase.ts
-index 211192c..b92b979 100644
+index 17677ae..1e01128 100644
 --- a/app/src/lib/git/rebase.ts
 +++ b/app/src/lib/git/rebase.ts
-@@ -29,8 +29,7 @@ import { stageFiles } from './update-index'
- import { getStatus } from './status'
+@@ -29,8 +29,7 @@ import { getStatus } from './status'
  import { getCommitsBetweenCommits } from './rev-list'
  import { Branch } from '../../models/branch'
+ import { join } from 'path'
 -import { readFile } from 'fs/promises'
 -import { pathExists } from '../path-exists'
 +import { wslReadFile as readFile, wslPathExists as pathExists } from '../wsl'
@@ -174,10 +174,10 @@ index 211192c..b92b979 100644
  /** The app-specific results from attempting to rebase a repository */
  export enum RebaseResult {
 diff --git a/app/src/lib/git/submodule.ts b/app/src/lib/git/submodule.ts
-index 08d3201..edea1e5 100644
+index 266b20b..62177c1 100644
 --- a/app/src/lib/git/submodule.ts
 +++ b/app/src/lib/git/submodule.ts
-@@ -3,7 +3,7 @@ import * as Path from 'path'
+@@ -1,7 +1,7 @@
  import { git, IGitStringExecutionOptions } from './core'
  import { Repository } from '../../models/repository'
  import { SubmoduleEntry } from '../../models/submodule'
@@ -187,10 +187,10 @@ index 08d3201..edea1e5 100644
  import {
    envForRemoteOperation,
 diff --git a/app/src/lib/stores/app-store.ts b/app/src/lib/stores/app-store.ts
-index 0ef30cc..9292fc6 100644
+index 6a317df..c3415b2 100644
 --- a/app/src/lib/stores/app-store.ts
 +++ b/app/src/lib/stores/app-store.ts
-@@ -360,7 +360,7 @@ import {
+@@ -368,7 +368,7 @@ import {
    getNotificationsEnabled,
  } from './notifications-store'
  import * as ipcRenderer from '../ipc-renderer'
@@ -199,7 +199,7 @@ index 0ef30cc..9292fc6 100644
  import { offsetFromNow } from '../offset-from'
  import { findContributionTargetDefaultBranch } from '../branch'
  import { ValidNotificationPullRequestReview } from '../valid-notification-pull-request-review'
-@@ -8032,7 +8032,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
+@@ -9006,7 +9006,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
      repository: Repository,
      sourceBranch: Branch | null
    ): Promise<void> {
