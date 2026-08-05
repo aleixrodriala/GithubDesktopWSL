@@ -27,16 +27,20 @@ jobs:
       - name: Checkout github-desktop-wsl
         uses: actions/checkout@v6
 
+      - name: Install cross-compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
       - name: Build daemon
         run: |
           cd wsl-daemon
-          make
+          gcc -O2 -o wsl-git-daemon-x64 daemon.c -lpthread
+          aarch64-linux-gnu-gcc -O2 -o wsl-git-daemon-arm64 daemon.c -lpthread
 
-      - name: Upload daemon binary
+      - name: Upload daemon binaries
         uses: actions/upload-artifact@v7
         with:
-          name: wsl-git-daemon
-          path: wsl-daemon/wsl-git-daemon
+          name: wsl-daemon-binaries
+          path: wsl-daemon/
 
   build-windows:
     needs: build-daemon
@@ -80,11 +84,11 @@ jobs:
           grep '"version"' app/package.json
         shell: bash
 
-      - name: Download daemon binary
+      - name: Download daemon binaries
         uses: actions/download-artifact@v8
         with:
-          name: wsl-git-daemon
-          path: desktop/wsl-daemon
+          name: wsl-daemon-binaries
+          path: desktop
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -182,10 +186,10 @@ jobs:
     needs: [build-daemon, build-windows]
     runs-on: ubuntu-latest
     steps:
-      - name: Download daemon
+      - name: Download daemon binaries
         uses: actions/download-artifact@v8
         with:
-          name: wsl-git-daemon
+          name: wsl-daemon-binaries
           path: artifacts
 
       - name: Download installer
