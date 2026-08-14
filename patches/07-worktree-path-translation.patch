@@ -1,8 +1,8 @@
 diff --git a/app/src/lib/git/worktree.ts b/app/src/lib/git/worktree.ts
-index bec61a1..375ed3a 100644
+index e1d99d1..21538f1 100644
 --- a/app/src/lib/git/worktree.ts
 +++ b/app/src/lib/git/worktree.ts
-@@ -2,6 +2,12 @@ import * as Path from 'path'
+@@ -2,6 +2,35 @@ import * as Path from 'path'
  import type { Repository } from '../../models/repository'
  import type { WorktreeEntry, WorktreeType } from '../../models/worktree'
  import { git } from './core'
@@ -12,10 +12,33 @@ index bec61a1..375ed3a 100644
 +  linuxPathToWSL,
 +  parseWSLPath,
 +} from '../wsl'
++
++/**
++ * On WSL, git runs inside the distro and returns POSIX worktree paths
++ * (/home/user/...). parseWorktreePorcelainOutput runs each through
++ * Path.normalize, which on Windows only flips separators (\home\user\...) —
++ * still rootless, so Windows cannot resolve it and the worktree fails to
++ * open. Lift those paths to \\wsl.localhost\<distro>\... using the distro of
++ * the (already-UNC) reference path. Native Windows paths are left untouched.
++ */
++function translateWorktreePaths(
++  entries: ReadonlyArray<WorktreeEntry>,
++  referencePath: string
++): ReadonlyArray<WorktreeEntry> {
++  if (!isWSLPath(referencePath)) {
++    return entries
++  }
++  const { distro } = parseWSLPath(referencePath)
++  return entries.map(entry =>
++    isRootlessPosixPath(entry.path)
++      ? { ...entry, path: linuxPathToWSL(distro, entry.path) }
++      : entry
++  )
++}
  
  export function parseWorktreePorcelainOutput(
    stdout: string
-@@ -55,15 +61,35 @@ export function parseWorktreePorcelainOutput(
+@@ -55,15 +84,21 @@ export function parseWorktreePorcelainOutput(
  export async function listWorktrees(
    repositoryOrPath: Repository | string
  ): Promise<ReadonlyArray<WorktreeEntry>> {
@@ -34,63 +57,19 @@ index bec61a1..375ed3a 100644
    )
  
 -  return parseWorktreePorcelainOutput(result.stdout)
-+  const entries = parseWorktreePorcelainOutput(result.stdout)
-+
-+  // On WSL, git runs inside the distro and returns POSIX worktree paths
-+  // (/home/user/...). parseWorktreePorcelainOutput runs each through
-+  // Path.normalize, which on Windows only flips separators (\home\user\...) —
-+  // still rootless, so Windows cannot resolve it and the worktree fails to
-+  // open. Lift those paths to \\wsl.localhost\<distro>\... using the distro of
-+  // the (already-UNC) repository path. Native Windows paths are left untouched.
-+  if (isWSLPath(repositoryPath)) {
-+    const { distro } = parseWSLPath(repositoryPath)
-+    return entries.map(entry =>
-+      isRootlessPosixPath(entry.path)
-+        ? { ...entry, path: linuxPathToWSL(distro, entry.path) }
-+        : entry
-+    )
-+  }
-+
-+  return entries
++  return translateWorktreePaths(
++    parseWorktreePorcelainOutput(result.stdout),
++    repositoryPath
++  )
+ }
+ 
+ export async function listWorktreesFromGitDir(
+@@ -75,7 +110,7 @@ export async function listWorktreesFromGitDir(
+     'listWorktreesFromGitDir'
+   )
+ 
+-  return parseWorktreePorcelainOutput(result.stdout)
++  return translateWorktreePaths(parseWorktreePorcelainOutput(result.stdout), gitDir)
  }
  
  export async function addWorktree(
-diff --git a/app/src/lib/wsl.ts b/app/src/lib/wsl.ts
-index ecc8009..1288da2 100644
---- a/app/src/lib/wsl.ts
-+++ b/app/src/lib/wsl.ts
-@@ -50,6 +50,34 @@ export function parseWSLPath(winPath: string): {
-   }
- }
- 
-+/**
-+ * Build a Windows WSL UNC path for a POSIX path inside a distro.
-+ * Inverse of parseWSLPath / toLinuxPath.
-+ * ('Ubuntu-24.04', '/home/user') → \\wsl.localhost\Ubuntu-24.04\home\user
-+ *
-+ * Accepts either a real POSIX path ('/home/user') or one that has already
-+ * been run through Path.normalize on Windows ('\home\user'): both are
-+ * separator-normalised to backslashes before the UNC prefix is prepended.
-+ */
-+export function linuxPathToWSL(distro: string, linuxPath: string): string {
-+  return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
-+}
-+
-+/**
-+ * True for a path that is rooted at the filesystem root but has no Windows
-+ * volume — i.e. a POSIX absolute path ('/home/user') or the string that
-+ * Path.normalize produces from one on Windows ('\home\user', a single leading
-+ * backslash, not a '\\' UNC path). These are the worktree paths git returns
-+ * inside WSL; Windows cannot resolve them until they are lifted to a UNC path.
-+ * Drive-letter paths ('C:\...') and UNC paths ('\\...') return false.
-+ */
-+export function isRootlessPosixPath(p: string): boolean {
-+  if (/^[a-zA-Z]:[\\/]/.test(p)) {
-+    return false
-+  }
-+  return p.startsWith('/') || (p.startsWith('\\') && !p.startsWith('\\\\'))
-+}
-+
- /** Resolve WSL path to { distro, linuxPath }, caching and persisting the distro. */
- function resolveWSLPath(winPath: string): { distro: string; linuxPath: string } {
-   const result = parseWSLPath(winPath)

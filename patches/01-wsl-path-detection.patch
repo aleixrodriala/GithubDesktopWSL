@@ -1,9 +1,9 @@
 diff --git a/app/src/lib/wsl.ts b/app/src/lib/wsl.ts
 new file mode 100644
-index 0000000..ecc8009
+index 0000000..1288da2
 --- /dev/null
 +++ b/app/src/lib/wsl.ts
-@@ -0,0 +1,495 @@
+@@ -0,0 +1,523 @@
 +/**
 + * WSL utilities and daemon client for GitHub Desktop WSL.
 + *
@@ -54,6 +54,34 @@ index 0000000..ecc8009
 +    distro: start.slice(0, slashIdx),
 +    linuxPath: start.slice(slashIdx).replace(/\\/g, '/'),
 +  }
++}
++
++/**
++ * Build a Windows WSL UNC path for a POSIX path inside a distro.
++ * Inverse of parseWSLPath / toLinuxPath.
++ * ('Ubuntu-24.04', '/home/user') → \\wsl.localhost\Ubuntu-24.04\home\user
++ *
++ * Accepts either a real POSIX path ('/home/user') or one that has already
++ * been run through Path.normalize on Windows ('\home\user'): both are
++ * separator-normalised to backslashes before the UNC prefix is prepended.
++ */
++export function linuxPathToWSL(distro: string, linuxPath: string): string {
++  return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
++}
++
++/**
++ * True for a path that is rooted at the filesystem root but has no Windows
++ * volume — i.e. a POSIX absolute path ('/home/user') or the string that
++ * Path.normalize produces from one on Windows ('\home\user', a single leading
++ * backslash, not a '\\' UNC path). These are the worktree paths git returns
++ * inside WSL; Windows cannot resolve them until they are lifted to a UNC path.
++ * Drive-letter paths ('C:\...') and UNC paths ('\\...') return false.
++ */
++export function isRootlessPosixPath(p: string): boolean {
++  if (/^[a-zA-Z]:[\\/]/.test(p)) {
++    return false
++  }
++  return p.startsWith('/') || (p.startsWith('\\') && !p.startsWith('\\\\'))
 +}
 +
 +/** Resolve WSL path to { distro, linuxPath }, caching and persisting the distro. */
