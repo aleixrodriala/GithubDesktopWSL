@@ -1,0 +1,75 @@
+diff --git a/app/src/lib/git/worktree.ts b/app/src/lib/git/worktree.ts
+index e1d99d1..21538f1 100644
+--- a/app/src/lib/git/worktree.ts
++++ b/app/src/lib/git/worktree.ts
+@@ -2,6 +2,35 @@ import * as Path from 'path'
+ import type { Repository } from '../../models/repository'
+ import type { WorktreeEntry, WorktreeType } from '../../models/worktree'
+ import { git } from './core'
++import {
++  isWSLPath,
++  isRootlessPosixPath,
++  linuxPathToWSL,
++  parseWSLPath,
++} from '../wsl'
++
++/**
++ * On WSL, git runs inside the distro and returns POSIX worktree paths
++ * (/home/user/...). parseWorktreePorcelainOutput runs each through
++ * Path.normalize, which on Windows only flips separators (\home\user\...) —
++ * still rootless, so Windows cannot resolve it and the worktree fails to
++ * open. Lift those paths to \\wsl.localhost\<distro>\... using the distro of
++ * the (already-UNC) reference path. Native Windows paths are left untouched.
++ */
++function translateWorktreePaths(
++  entries: ReadonlyArray<WorktreeEntry>,
++  referencePath: string
++): ReadonlyArray<WorktreeEntry> {
++  if (!isWSLPath(referencePath)) {
++    return entries
++  }
++  const { distro } = parseWSLPath(referencePath)
++  return entries.map(entry =>
++    isRootlessPosixPath(entry.path)
++      ? { ...entry, path: linuxPathToWSL(distro, entry.path) }
++      : entry
++  )
++}
+ 
+ export function parseWorktreePorcelainOutput(
+   stdout: string
+@@ -55,15 +84,21 @@ export function parseWorktreePorcelainOutput(
+ export async function listWorktrees(
+   repositoryOrPath: Repository | string
+ ): Promise<ReadonlyArray<WorktreeEntry>> {
+-  const result = await git(
+-    ['worktree', 'list', '--porcelain', '-z'],
++  const repositoryPath =
+     typeof repositoryOrPath === 'string'
+       ? repositoryOrPath
+-      : repositoryOrPath.path,
++      : repositoryOrPath.path
++
++  const result = await git(
++    ['worktree', 'list', '--porcelain', '-z'],
++    repositoryPath,
+     'listWorktrees'
+   )
+ 
+-  return parseWorktreePorcelainOutput(result.stdout)
++  return translateWorktreePaths(
++    parseWorktreePorcelainOutput(result.stdout),
++    repositoryPath
++  )
+ }
+ 
+ export async function listWorktreesFromGitDir(
+@@ -75,7 +110,7 @@ export async function listWorktreesFromGitDir(
+     'listWorktreesFromGitDir'
+   )
+ 
+-  return parseWorktreePorcelainOutput(result.stdout)
++  return translateWorktreePaths(parseWorktreePorcelainOutput(result.stdout), gitDir)
+ }
+ 
+ export async function addWorktree(
