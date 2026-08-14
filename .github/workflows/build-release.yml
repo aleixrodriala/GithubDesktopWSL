@@ -27,16 +27,22 @@ jobs:
       - name: Checkout github-desktop-wsl
         uses: actions/checkout@v6
 
-      - name: Build daemon
+      - name: Install ARM64 cross-compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build daemon (x64 + arm64)
         run: |
           cd wsl-daemon
           make
+          make arm64
 
-      - name: Upload daemon binary
+      - name: Upload daemon binaries
         uses: actions/upload-artifact@v7
         with:
           name: wsl-git-daemon
-          path: wsl-daemon/wsl-git-daemon
+          path: |
+            wsl-daemon/wsl-git-daemon
+            wsl-daemon/wsl-git-daemon-arm64
 
   build-windows:
     needs: build-daemon
@@ -80,7 +86,7 @@ jobs:
           grep '"version"' app/package.json
         shell: bash
 
-      - name: Download daemon binary
+      - name: Download daemon binaries
         uses: actions/download-artifact@v8
         with:
           name: wsl-git-daemon
@@ -109,11 +115,13 @@ jobs:
       - name: Verify daemon bundled
         shell: pwsh
         run: |
-          if (Test-Path "desktop\out\wsl-git-daemon") {
-            Write-Host "wsl-git-daemon found in out/"
-          } else {
-            Write-Error "wsl-git-daemon NOT found in out/ - build.ts did not copy it"
-            exit 1
+          foreach ($name in @("wsl-git-daemon", "wsl-git-daemon-arm64")) {
+            if (Test-Path "desktop\out\$name") {
+              Write-Host "$name found in out/"
+            } else {
+              Write-Error "$name NOT found in out/ - build.ts did not copy it"
+              exit 1
+            }
           }
 
       - name: Package Windows installer
@@ -182,7 +190,7 @@ jobs:
     needs: [build-daemon, build-windows]
     runs-on: ubuntu-latest
     steps:
-      - name: Download daemon
+      - name: Download daemon binaries
         uses: actions/download-artifact@v8
         with:
           name: wsl-git-daemon
