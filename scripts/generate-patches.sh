@@ -76,6 +76,11 @@ echo "06-build-packaging.patch"
 git diff "$BASE_COMMIT"..HEAD -- script/build.ts script/package.ts \
     > "$PATCHES_DIR/06-build-packaging.patch"
 
+# Patch 07: Worktree path translation (POSIX → UNC, helpers live in wsl.ts / patch 01)
+echo "07-worktree-path-translation.patch"
+git diff "$BASE_COMMIT"..HEAD -- app/src/lib/git/worktree.ts \
+    > "$PATCHES_DIR/07-worktree-path-translation.patch"
+
 echo ""
 echo "Generated patches:"
 ls -la "$PATCHES_DIR"/*.patch
