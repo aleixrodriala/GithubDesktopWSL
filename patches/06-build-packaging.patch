@@ -1,29 +1,37 @@
 diff --git a/script/build.ts b/script/build.ts
-index e3708f8dc0..431679cf31 100755
+index b1c773d..d0a6299 100755
 --- a/script/build.ts
 +++ b/script/build.ts
-@@ -404,6 +404,16 @@ function copyDependencies() {
+@@ -428,6 +428,24 @@ function copyDependencies() {
      ),
      { recursive: true, verbatimSymlinks: true }
    )
 +
-+  // WSL fork: bundle the daemon binary for auto-deployment into WSL
-+  const daemonSource = path.resolve(projectRoot, 'wsl-daemon', 'wsl-git-daemon')
-+  const daemonDest = path.resolve(outRoot, 'wsl-git-daemon')
-+  if (existsSync(daemonSource)) {
-+    console.log('  Copying wsl-git-daemon binary')
-+    cpSync(daemonSource, daemonDest)
-+  } else {
-+    console.log('  Warning: wsl-git-daemon not found (build with make in wsl-daemon/)')
++  // WSL fork: bundle the daemon binaries for auto-deployment into WSL.
++  // Both arches ship in every installer — the right one is picked at runtime
++  // from the distro's `uname -m` (x64 keeps the unsuffixed name for
++  // back-compat). The arm64 binary is optional so local x64-only dev
++  // builds keep working.
++  for (const name of ['wsl-git-daemon', 'wsl-git-daemon-arm64']) {
++    const daemonSource = path.resolve(projectRoot, 'wsl-daemon', name)
++    const daemonDest = path.resolve(outRoot, name)
++    if (existsSync(daemonSource)) {
++      console.log(`  Copying ${name} binary`)
++      cpSync(daemonSource, daemonDest)
++    } else {
++      console.log(
++        `  Warning: ${name} not found (build with make in wsl-daemon/)`
++      )
++    }
 +  }
  }
  
  function generateLicenseMetadata(outRoot: string) {
 diff --git a/script/package.ts b/script/package.ts
-index 229df55e8a..3a59777867 100644
+index ab724c0..df8e11d 100644
 --- a/script/package.ts
 +++ b/script/package.ts
-@@ -104,7 +104,9 @@ function packageWindows() {
+@@ -106,7 +106,9 @@ function packageWindows() {
      setupMsi: getWindowsInstallerName(),
    }
  
@@ -34,7 +42,7 @@ index 229df55e8a..3a59777867 100644
      const url = new URL(getUpdatesURL())
      // Make sure Squirrel.Windows isn't affected by partially or completely
      // disabled releases.
-@@ -112,7 +114,12 @@ function packageWindows() {
+@@ -114,7 +116,12 @@ function packageWindows() {
      options.remoteReleases = url.toString()
    }
  

@@ -27,20 +27,22 @@ jobs:
       - name: Checkout github-desktop-wsl
         uses: actions/checkout@v6
 
-      - name: Install cross-compiler
+      - name: Install ARM64 cross-compiler
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
 
-      - name: Build daemon
+      - name: Build daemon (x64 + arm64)
         run: |
           cd wsl-daemon
-          gcc -O2 -o wsl-git-daemon-x64 daemon.c -lpthread
-          aarch64-linux-gnu-gcc -O2 -o wsl-git-daemon-arm64 daemon.c -lpthread
+          make
+          make arm64
 
       - name: Upload daemon binaries
         uses: actions/upload-artifact@v7
         with:
-          name: wsl-daemon-binaries
-          path: wsl-daemon/
+          name: wsl-git-daemon
+          path: |
+            wsl-daemon/wsl-git-daemon
+            wsl-daemon/wsl-git-daemon-arm64
 
   build-windows:
     needs: build-daemon
@@ -87,8 +89,8 @@ jobs:
       - name: Download daemon binaries
         uses: actions/download-artifact@v8
         with:
-          name: wsl-daemon-binaries
-          path: desktop
+          name: wsl-git-daemon
+          path: desktop/wsl-daemon
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -113,11 +115,13 @@ jobs:
       - name: Verify daemon bundled
         shell: pwsh
         run: |
-          if (Test-Path "desktop\out\wsl-git-daemon") {
-            Write-Host "wsl-git-daemon found in out/"
-          } else {
-            Write-Error "wsl-git-daemon NOT found in out/ - build.ts did not copy it"
-            exit 1
+          foreach ($name in @("wsl-git-daemon", "wsl-git-daemon-arm64")) {
+            if (Test-Path "desktop\out\$name") {
+              Write-Host "$name found in out/"
+            } else {
+              Write-Error "$name NOT found in out/ - build.ts did not copy it"
+              exit 1
+            }
           }
 
       - name: Package Windows installer
@@ -189,7 +193,7 @@ jobs:
       - name: Download daemon binaries
         uses: actions/download-artifact@v8
         with:
-          name: wsl-daemon-binaries
+          name: wsl-git-daemon
           path: artifacts
 
       - name: Download installer

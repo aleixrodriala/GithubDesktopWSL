@@ -1,9 +1,9 @@
 diff --git a/app/src/lib/wsl.ts b/app/src/lib/wsl.ts
 new file mode 100644
-index 0000000..1288da2
+index 0000000..a2b186d
 --- /dev/null
 +++ b/app/src/lib/wsl.ts
-@@ -0,0 +1,523 @@
+@@ -0,0 +1,533 @@
 +/**
 + * WSL utilities and daemon client for GitHub Desktop WSL.
 + *
@@ -335,14 +335,23 @@ index 0000000..1288da2
 +
 +/* ── Daemon Lifecycle ────────────────────────────────────────────────── */
 +
-+function getBundledDaemonPath(): string {
++function getBundledDaemonPath(distroArch: string): string {
++  // The distro's arch decides which binary to deploy — on ARM64 Windows the
++  // app itself runs x64-emulated (process.arch lies), but WSL distros are
++  // native aarch64. x64 keeps the unsuffixed name for back-compat.
++  const name =
++    distroArch === 'aarch64' ? 'wsl-git-daemon-arm64' : 'wsl-git-daemon'
 +  for (const p of [
-+    Path.resolve(__dirname, 'wsl-git-daemon'),
-+    Path.resolve(__dirname, '..', '..', 'wsl-daemon', 'wsl-git-daemon'),
++    Path.resolve(__dirname, name),
++    Path.resolve(__dirname, '..', '..', 'wsl-daemon', name),
 +  ]) {
 +    if (fs.existsSync(p)) return p
 +  }
-+  throw new Error('wsl-git-daemon binary not found. Build it: cd wsl-daemon && make')
++  throw new Error(
++    `${name} binary not found. Build it: cd wsl-daemon && make${
++      distroArch === 'aarch64' ? ' arm64' : ''
++    }`
++  )
 +}
 +
 +let daemonStarting: Promise<void> | null = null
@@ -368,7 +377,8 @@ index 0000000..1288da2
 +
 +  // Deploy binary if needed
 +  try {
-+    const bundledPath = getBundledDaemonPath()
++    const distroArch = (await wslAsync('uname -m')).trim()
++    const bundledPath = getBundledDaemonPath(distroArch)
 +    let needsDeploy = true
 +    try {
 +      await wslAsync(`test -x ${DAEMON_DEPLOY_BIN}`)
