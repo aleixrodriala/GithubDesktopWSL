@@ -102,50 +102,6 @@ index b6797fc..3c86d47 100644
    return new Image(
      contents.buffer,
      contents.toString('base64'),
-diff --git a/app/src/lib/git/gitignore.ts b/app/src/lib/git/gitignore.ts
-index 671f703..a3ffe5f 100644
---- a/app/src/lib/git/gitignore.ts
-+++ b/app/src/lib/git/gitignore.ts
-@@ -2,7 +2,12 @@ import * as Path from 'path'
- import * as FS from 'fs'
- import { Repository } from '../../models/repository'
- import { getConfigValue } from './config'
--import { writeFile } from 'fs/promises'
-+import {
-+  isWSLPath,
-+  wslReadFile,
-+  wslWriteFile as writeFile,
-+  wslUnlink,
-+} from '../wsl'
- 
- /**
-  * Read the contents of the repository .gitignore.
-@@ -16,6 +21,15 @@ export async function readGitIgnoreAtRoot(
- ): Promise<string | null> {
-   const ignorePath = Path.join(repository.path, '.gitignore')
- 
-+  if (isWSLPath(ignorePath)) {
-+    try {
-+      const data = await wslReadFile(ignorePath, 'utf8')
-+      return data
-+    } catch {
-+      return null
-+    }
-+  }
-+
-   return new Promise<string | null>((resolve, reject) => {
-     FS.readFile(ignorePath, 'utf8', (err, data) => {
-       if (err) {
-@@ -44,6 +58,9 @@ export async function saveGitIgnore(
-   const ignorePath = Path.join(repository.path, '.gitignore')
- 
-   if (text === '') {
-+    if (isWSLPath(ignorePath)) {
-+      return wslUnlink(ignorePath)
-+    }
-     return new Promise<void>((resolve, reject) => {
-       FS.unlink(ignorePath, err => {
-         if (err) {
 diff --git a/app/src/lib/git/merge.ts b/app/src/lib/git/merge.ts
 index db52ba8..cecf576 100644
 --- a/app/src/lib/git/merge.ts
