@@ -2,9 +2,10 @@ diff --git a/app/src/lib/git/worktree.ts b/app/src/lib/git/worktree.ts
 index e1d99d1..21538f1 100644
 --- a/app/src/lib/git/worktree.ts
 +++ b/app/src/lib/git/worktree.ts
-@@ -2,6 +2,35 @@ import * as Path from 'path'
+@@ -2,7 +2,36 @@ import * as Path from 'path'
  import type { Repository } from '../../models/repository'
  import type { WorktreeEntry, WorktreeType } from '../../models/worktree'
+ import { pathExists } from '../path-exists'
  import { git } from './core'
 +import {
 +  isWSLPath,
@@ -72,4 +73,4 @@ index e1d99d1..21538f1 100644
 +  return translateWorktreePaths(parseWorktreePorcelainOutput(result.stdout), gitDir)
  }
  
- export async function addWorktree(
+ /**

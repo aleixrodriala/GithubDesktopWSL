@@ -46,7 +46,7 @@ echo "02-git-routing.patch"
 git diff "$BASE_COMMIT"..HEAD -- app/src/lib/git/core.ts \
     > "$PATCHES_DIR/02-git-routing.patch"
 
-# Patch 03: File operations (import swaps + gitignore WSL)
+# Patch 03: File operations (import swaps)
 echo "03-file-operations.patch"
 git diff "$BASE_COMMIT"..HEAD -- \
     app/src/lib/git/diff.ts \
@@ -54,7 +54,6 @@ git diff "$BASE_COMMIT"..HEAD -- \
     app/src/lib/git/cherry-pick.ts \
     app/src/lib/git/merge.ts \
     app/src/lib/git/description.ts \
-    app/src/lib/git/gitignore.ts \
     app/src/lib/git/submodule.ts \
     app/src/lib/stores/app-store.ts \
     > "$PATCHES_DIR/03-file-operations.patch"
